@@ -8,10 +8,6 @@ import moment from "moment";
 import SelectInput from 'react-native-select-input-ios'
 import MapView from 'react-native-maps';
 
-import * as FileSystem from 'expo-file-system';
-import * as MediaLibrary from "expo-media-library";
-import * as Sharing from "expo-sharing";
-
 
 // temperature, barometer
 // save coordinates and save to cloud
@@ -26,9 +22,7 @@ const locationInformation = ["altitude", "altitudeAccuracy", "latitude", "accura
 const colorOptions = [{ value: 'orange', label: 'Orange' }, { value: 'green', label: 'Green' }, { value: 'blue', label: 'Blue' }];
 let color = 'orange';
 
-let kmlString = '<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2">';
-
-Accelerometer.setUpdateInterval(100);
+Accelerometer.setUpdateInterval(1000);
 Magnetometer.setUpdateInterval(1000);
 Barometer.setUpdateInterval(1000);
 DeviceMotion.setUpdateInterval(1000);
@@ -46,60 +40,20 @@ function HomeScreen({ navigation }) {
   const [errorMsg, setErrorMsg] = React.useState(null);
   const [tracking, setTracking] = React.useState(false);
 
+  const [proximity, setProximity] = React.useState(false);
+
   let isRendered = React.useRef(false);
-
-  let timestamp = 0;
-
-  const createKML = async (kml) => {
-
-    try {
-      // file:///var/mobile/Containers/Data/Application/D5B3D430-0CDF-4644-97E8-186B04EE4ED7/Documents/ExponentExperienceData/%2540vivekandathil%252Fsensors/
-      const uri = (FileSystem.documentDirectory + "tracking.kml");
-      FileSystem.writeAsStringAsync(uri, (kmlString + '</kml>'))
-      // const { uri } = await Print.printToFileAsync({ kml });
-      if (Platform.OS === "ios") {
-        await Sharing.shareAsync(uri);
-      } else {
-        const permission = await MediaLibrary.requestPermissionsAsync();
-        if (permission.granted) {
-          await MediaLibrary.createAssetAsync(uri);
-        }
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  React.useEffect(() => {
-    const interval = setInterval(async () => {
-      timestamp += 1;
-
-      await Location.getLastKnownPositionAsync()
-        .then((position) => {
-          console.log("currentPosition", position);
-          setLocation(position);
-          kmlString += `<Placemark><Point><coordinates>${position.coords.longitude},${position.coords.latitude},${position.coords.altitude}</coordinates></Point></Placemark>`;
-
-        }).catch((error) => {
-          console.log(error);
-        });
-
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Ask user for permission to access location and constantly update
   React.useEffect(() => {
     isRendered = true;
-
-
     (async () => {
 
       let { status } = await Location.requestPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Permission to access location was denied');
       }
-      if (isRendered && tracking) {
+      if (isRendered) {
         Accelerometer.addListener(accelerometerData => {
           setAcceleration(accelerometerData);
         });
@@ -109,11 +63,9 @@ function HomeScreen({ navigation }) {
         Magnetometer.addListener(data => {
           setMagneticField(data);
         });
-
-
-
-
+        setLocation(await Location.getCurrentPositionAsync({}));
         setHeading(await Location.getHeadingAsync({}));
+        setLocation(location);
       }
 
     })();
@@ -121,7 +73,6 @@ function HomeScreen({ navigation }) {
       isRendered = false;
     };
   });
-
 
 
   let text = 'Waiting..';
@@ -150,14 +101,6 @@ function HomeScreen({ navigation }) {
       </View>
       <View style={{ display: 'flex', width: '90%', marginTop: 10, flexDirection: 'row', justifyContent: 'space-evenly' }}>
         <InfoBox information={`x: ${JSON.stringify(acceleration.x).slice(0, 5)} G's\ny: ${JSON.stringify(acceleration.y).slice(0, 5)} G's\nz: ${JSON.stringify(acceleration.z).slice(0, 5)}`} name={"Acceleration"} units={"G's"} height={100} width={140} />
-        <Button
-          onPress={createKML}
-          title="Set"
-        />
-        <Button
-          onPress={() => setTracking(!tracking)}
-          title="Start Tracking"
-        />
         <Button
           onPress={() => navigation.navigate('MyModal')}
           title="Settings"
